@@ -1,0 +1,45 @@
+# cargo-audit configuration
+#
+# CI runs `cargo audit` as a hard gate. Everything ignored below is a
+# RustSec *warning-class* finding (unmaintained / unsound) inside transitive,
+# upstream-controlled dependencies — none of them is a vulnerability in code
+# we ship. Vulnerability-class advisories stay enforced: do not add real
+# RUSTSEC vulnerabilities to this list; fix or bump the dependency instead.
+# Re-review this file whenever Tauri bumps its Linux/gtk stack.
+
+[advisories]
+
+ignore = [
+    # ── gtk-rs GTK3 bindings stack (unmaintained upstream) ─────────────────
+    # Pinned by tauri v2's Linux backend (gtk 0.18 family). Removal requires
+    # a Tauri-side migration to gtk4 / the tao+wry rewrite; nothing we can do
+    # at the application level.
+    "RUSTSEC-2024-0413", # atk            - unmaintained
+    "RUSTSEC-2024-0416", # atk-sys        - unmaintained
+    "RUSTSEC-2024-0412", # gdk            - unmaintained
+    "RUSTSEC-2024-0418", # gdk-sys        - unmaintained
+    "RUSTSEC-2024-0411", # gdkwayland-sys - unmaintained
+    "RUSTSEC-2024-0417", # gdkx11         - unmaintained
+    "RUSTSEC-2024-0414", # gdkx11-sys     - unmaintained
+    "RUSTSEC-2024-0415", # gtk            - unmaintained
+    "RUSTSEC-2024-0420", # gtk-sys        - unmaintained
+    "RUSTSEC-2024-0419", # gtk3-macros    - unmaintained
+
+    # ── glib unsoundness, same pinned 0.18 stack ───────────────────────────
+    "RUSTSEC-2024-0429", # glib - VariantStrIter unsoundness; fixed only in 0.19+
+
+    # ── unic-* family (unmaintained) via tauri-utils → urlpattern ──────────
+    "RUSTSEC-2025-0081", # unic-char-property - unmaintained
+    "RUSTSEC-2025-0075", # unic-char-range    - unmaintained
+    "RUSTSEC-2025-0080", # unic-common        - unmaintained
+    "RUSTSEC-2025-0100", # unic-ucd-ident     - unmaintained
+    "RUSTSEC-2025-0098", # unic-ucd-version   - unmaintained
+
+    # ── proc-macro-error (unmaintained), pulled by derive macros upstream ──
+    "RUSTSEC-2024-0370",
+
+    # ── event-listener StackSlot unsoundness ────────────────────────────────
+    # Lockfile already bumped to 5.4.2; kept here until the advisory marks a
+    # patched version so the gate stays green either way.
+    "RUSTSEC-2026-0221",
+]
