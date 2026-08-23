@@ -25,6 +25,8 @@ import { formatRelativeTime, formatBytes } from "@/utils/format";
 import { openConnectPanelKey } from "@/composables/useConnectPanel";
 import type { Device } from "@/types";
 import { useLocale } from "@/i18n";
+import EmptyState from "@/components/ui/EmptyState.vue";
+import AppButton from "@/components/ui/AppButton.vue";
 
 const devicesStore = useDevicesStore();
 const appStore = useAppStore();
@@ -419,14 +421,19 @@ const sendBtnLabel = computed(() => {
             </span>
           </div>
           <!-- audit-1: guide first-time users instead of rendering a bare table -->
-          <div v-if="devicesStore.devices.length === 0" class="devices-empty">
-            <Radar :size="22" class="devices-empty-icon" />
-            <p class="devices-empty-title">{{ t("home.noDevicesTitle") }}</p>
-            <p class="devices-empty-desc">{{ t("home.noDevicesDesc") }}</p>
-            <button class="devices-empty-btn" type="button" @click="openConnectPanel">
-              {{ t("app.connectDevice") }}
-            </button>
-          </div>
+          <EmptyState
+            v-if="devicesStore.devices.length === 0"
+            :title="t('home.noDevicesTitle')"
+            :description="t('home.noDevicesDesc')"
+            class="devices-empty"
+          >
+            <template #icon><Radar :size="22" /></template>
+            <template #action>
+              <AppButton variant="primary" @click="openConnectPanel">
+                {{ t("app.connectDevice") }}
+              </AppButton>
+            </template>
+          </EmptyState>
         </div>
       </section>
 
@@ -831,8 +838,9 @@ const sendBtnLabel = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  /* Fluent icon-button minimum hit target (platform-layout-alignment §2). */
+  width: 28px;
+  height: 28px;
   border: none;
   background: transparent;
   border-radius: var(--radius-sm);
@@ -957,32 +965,7 @@ const sendBtnLabel = computed(() => {
   font-weight: var(--weight-normal);
 }
 
-.devices-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 28px 16px;
-  border: 1px dashed var(--color-border-strong);
-  border-radius: var(--radius-md);
-  text-align: center;
-}
-
-.devices-empty-icon { color: var(--color-text-tertiary); }
-.devices-empty-title { margin: 4px 0 0; font-size: var(--text-base); color: var(--color-text-primary); font-weight: var(--weight-medium); }
-.devices-empty-desc { margin: 0; max-width: 380px; color: var(--color-text-tertiary); font-size: var(--text-sm); line-height: 1.5; }
-.devices-empty-btn {
-  margin-top: 10px;
-  padding: 7px 16px;
-  border: none;
-  border-radius: var(--radius-md);
-  background: var(--color-brand-primary);
-  color: var(--color-text-inverse);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  cursor: pointer;
-}
-.devices-empty-btn:hover { background: var(--color-brand-primary-hover); }
+.devices-empty { border: none; }
 
 .send-actions { display: flex; gap: 10px; }
 

@@ -806,8 +806,9 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  /* Fluent icon-button minimum hit target. */
+  width: 28px;
+  height: 28px;
   border: none;
   background: transparent;
   border-radius: var(--radius-sm);
@@ -976,8 +977,9 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  /* Fluent icon-button minimum hit target (platform-layout-alignment §2). */
+  width: 28px;
+  height: 28px;
   border: none;
   background: transparent;
   border-radius: var(--radius-sm);

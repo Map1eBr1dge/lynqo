@@ -133,8 +133,9 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  /* Fluent icon-button minimum hit target. */
+  width: 28px;
+  height: 28px;
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;

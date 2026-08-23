@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, shallowRef } from "vue";
+import { computed, onMounted, onUnmounted, shallowRef } from "vue";
 import { Check, Monitor, QrCode, Send, X } from "lucide-vue-next";
 import { useLocale } from "@/i18n";
 import { readAndMigrateLocalStorageValue } from "@/utils/storage";
-import { useModalA11y } from "@/composables/useModalA11y";
+import AppDialog from "@/components/ui/AppDialog.vue";
 
 const STORAGE_KEY = "lannook.first-launch-guide.v1";
 const LEGACY_STORAGE_KEYS = ["lynqo.first-launch-guide.v1"] as const;
@@ -11,13 +11,6 @@ const LEGACY_STORAGE_KEYS = ["lynqo.first-launch-guide.v1"] as const;
 const REOPEN_GUIDE_EVENT = "lannook:reopen-guide";
 const { locale, setLocale, t } = useLocale();
 const visible = shallowRef(readDismissed() === false);
-const dialogElement = ref<HTMLElement | null>(null);
-
-useModalA11y({
-  visible: () => visible.value,
-  container: dialogElement,
-  onEscape: () => dismiss(),
-});
 
 function readDismissed(): boolean {
   try {
@@ -56,8 +49,8 @@ const steps = computed(() => [
 </script>
 
 <template>
-  <div v-if="visible" class="guide-overlay">
-    <section ref="dialogElement" class="guide-dialog" role="dialog" aria-modal="true" aria-labelledby="guide-title">
+  <AppDialog :open="visible" size="md" labelled-by="guide-title" @close="dismiss">
+    <div class="guide-body">
       <button class="guide-close" type="button" :aria-label="t('onboarding.close')" @click="dismiss">
         <X :size="18" />
       </button>
@@ -81,13 +74,12 @@ const steps = computed(() => [
       </div>
       <button class="guide-primary" type="button" @click="dismiss">{{ t("onboarding.start") }}</button>
       <button class="guide-secondary" type="button" @click="dismiss">{{ t("onboarding.skip") }}</button>
-    </section>
-  </div>
+    </div>
+  </AppDialog>
 </template>
 
 <style scoped>
-.guide-overlay { position: fixed; inset: 0; z-index: 2900; display: grid; place-items: center; padding: 24px; background: rgba(16, 24, 40, .5); backdrop-filter: blur(3px); }
-.guide-dialog { position: relative; width: min(600px, 100%); padding: 32px; color: var(--color-text-primary); background: var(--color-surface-card); border: 1px solid var(--color-border); border-radius: var(--radius-xl); box-shadow: var(--shadow-float); }
+.guide-body { position: relative; padding: 32px; }
 .guide-close { position: absolute; top: 16px; right: 16px; display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 50%; color: var(--color-text-secondary); background: var(--color-surface-inset); cursor: pointer; }
 .guide-language { position: absolute; top: 16px; right: 56px; padding: 7px 9px; color: var(--color-text-brand); background: transparent; border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-size: var(--text-xs); cursor: pointer; }
 .guide-eyebrow { margin: 0 0 6px; color: var(--color-brand-primary); font-size: var(--text-xs); font-weight: var(--weight-semibold); letter-spacing: .08em; text-transform: uppercase; }
@@ -103,5 +95,5 @@ const steps = computed(() => [
 .guide-primary, .guide-secondary { width: 100%; margin-top: 20px; padding: 10px 14px; border-radius: var(--radius-md); font-size: var(--text-sm); cursor: pointer; }
 .guide-primary { color: #fff; background: var(--color-brand-primary); border: 1px solid var(--color-brand-primary); }
 .guide-secondary { margin-top: 8px; color: var(--color-text-secondary); background: transparent; border: 0; }
-@media (max-width: 640px) { .guide-overlay { padding: 12px; } .guide-dialog { padding: 24px 18px; } }
+@media (max-width: 640px) { .guide-body { padding: 24px 18px; } }
 </style>

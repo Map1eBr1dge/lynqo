@@ -4,7 +4,7 @@ import { DownloadCloud, FileText, Clock, CheckCircle2, XCircle, RotateCcw } from
 import { useLocale } from "@/i18n";
 import { formatBytes } from "@/utils/format";
 import type { ReceiveDownloadItem } from "@/stores/mobileSession";
-import { useModalA11y } from "@/composables/useModalA11y";
+import AppDialog from "@/components/ui/AppDialog.vue";
 
 export interface ReceiveTransferInfo {
   id: string;
@@ -68,26 +68,25 @@ watch(
     };
     tick();
     countdownTimer = setInterval(tick, 1000);
-    if (transfer.expiresAt && deadline - Date.now() <= 0) {
-      // Already expired server-side; tick above handled it.
-    } else if (!transfer.expiresAt) {
-      expiryTimer = setTimeout(() => {
-        isExpired.value = true;
-        stopTimers();
-      }, deadline - Date.now());
-    }
   },
   { immediate: true }
 );
 
 onUnmounted(stopTimers);
 
-const cardElement = ref<HTMLElement | null>(null);
-useModalA11y({
-  visible: () => props.visible,
-  container: cardElement,
-  onEscape: () => handleReject(),
-});
+const isOpen = computed(() => props.visible && props.transfer != null);
+
+function handleAccept() {
+  if (props.transfer && !isExpired.value) {
+    emit("accept", props.transfer.id);
+  }
+}
+
+function handleReject() {
+  if (props.transfer) {
+    emit("reject", props.transfer.id);
+  }
+}
 
 const fileCount = computed(() => props.transfer?.files.length ?? 0);
 const formattedTotal = computed(() => formatBytes(props.transfer?.totalBytes ?? 0));
@@ -121,152 +120,117 @@ function truncateName(name: string, maxLen = 32): string {
   }
   return `${name.slice(0, maxLen - 3)}...`;
 }
-
-function handleAccept() {
-  if (props.transfer && !isExpired.value) {
-    emit("accept", props.transfer.id);
-  }
-}
-
-function handleReject() {
-  if (props.transfer) {
-    emit("reject", props.transfer.id);
-  }
-}
 </script>
 
 <template>
-  <Teleport to="body">
-    <div v-if="visible && transfer" class="dialog-wrapper">
-      <div class="backdrop" />
-      <div ref="cardElement" class="dialog-card" role="dialog" aria-modal="true" :aria-label="t('receive.incomingRequest', { name: transfer.sourceDeviceName, count: fileCount })">
-        <!-- Header -->
-        <div class="dialog-header">
-          <div class="dialog-icon">
-            <DownloadCloud :size="24" />
-          </div>
-          <h2 class="dialog-title">
-            {{ t("receive.incomingRequest", { name: transfer.sourceDeviceName, count: fileCount }) }}
-          </h2>
-          <p v-if="remainingLabel && !isExpired && !hasDownloadState" class="expiry-countdown" :class="{ 'expiry-countdown--urgent': (remainingSeconds ?? 0) < 60 }">
-            <Clock :size="13" /> {{ t("receive.expiresIn", { time: remainingLabel }) }}
-          </p>
+  <AppDialog
+    :open="isOpen"
+    size="sm"
+    labelled-by="receive-title"
+    @close="handleReject"
+  >
+    <div class="receive-body">
+      <!-- Header -->
+      <div class="dialog-header">
+        <div class="dialog-icon">
+          <DownloadCloud :size="24" />
         </div>
-
-        <!-- Expired State -->
-        <div v-if="isExpired" class="expired-state">
-          <Clock :size="20" />
-          <span class="expired-text">{{ t("receive.expired") }}</span>
-          <button class="reject-btn" @click="handleReject">{{ t("receive.close") }}</button>
-        </div>
-
-        <!-- Normal State -->
-        <template v-else>
-          <!-- File List: live per-file state while downloading, plain list before -->
-          <div class="file-list">
-            <template v-if="!hasDownloadState">
-              <div
-                v-for="(file, idx) in transfer.files"
-                :key="file.id || idx"
-                class="file-row"
-              >
-                <FileText :size="14" class="file-row-icon" />
-                <span class="file-row-name">{{ truncateName(file.name) }}</span>
-                <span class="file-row-size">{{ formatBytes(file.size) }}</span>
-              </div>
-            </template>
-            <template v-else>
-              <div v-for="item in downloadItems" :key="item.fileId" class="file-row file-row--live">
-                <CheckCircle2 v-if="item.status === 'done'" :size="14" class="file-status file-status--done" />
-                <XCircle v-else-if="item.status === 'failed'" :size="14" class="file-status file-status--failed" />
-                <FileText v-else :size="14" class="file-row-icon" />
-                <span class="file-row-body">
-                  <span class="file-row-name">{{ truncateName(item.name) }}</span>
-                  <span v-if="item.status === 'downloading'" class="file-progress">
-                    <span class="file-progress-fill" :style="{ width: `${percentOf(item)}%` }" />
-                  </span>
-                  <span v-if="item.status === 'failed' && item.error" class="file-error">{{ item.error }}</span>
-                </span>
-                <span v-if="item.status === 'downloading'" class="file-row-size">
-                  {{ formatBytes(item.loadedBytes) }}
-                </span>
-                <button
-                  v-if="item.status === 'failed'"
-                  class="retry-file-btn"
-                  type="button"
-                  :disabled="receiving"
-                  @click="emit('retryFile', item.fileId)"
-                >
-                  <RotateCcw :size="12" /> {{ t("transfers.retry") }}
-                </button>
-              </div>
-            </template>
-          </div>
-
-          <!-- Total -->
-          <div class="total-row">
-            <span class="total-label">{{ t("receive.total") }}</span>
-            <span class="total-value">
-              {{ formattedTotal }}
-              <span v-if="hasDownloadState" class="done-count">{{ t("receive.doneCount", { done: doneCount, total: fileCount }) }}</span>
-            </span>
-          </div>
-
-          <!-- Actions -->
-          <div class="dialog-actions">
-            <button
-              v-if="!hasDownloadState"
-              class="accept-btn"
-              :disabled="receiving"
-              @click="handleAccept"
-            >
-              {{ receiving ? t("receive.preparing") : t("receive.accept") }}
-            </button>
-            <button
-              class="reject-btn"
-              :disabled="receiving && !hasDownloadState"
-              @click="handleReject"
-            >
-              {{ hasDownloadState ? t("receive.closeAfterBatch") : t("receive.reject") }}
-            </button>
-          </div>
-        </template>
+        <h2 id="receive-title" class="dialog-title">
+          {{ transfer ? t("receive.incomingRequest", { name: transfer.sourceDeviceName, count: fileCount }) : "" }}
+        </h2>
+        <p v-if="remainingLabel && !isExpired && !hasDownloadState" class="expiry-countdown" :class="{ 'expiry-countdown--urgent': (remainingSeconds ?? 0) < 60 }">
+          <Clock :size="13" /> {{ t("receive.expiresIn", { time: remainingLabel }) }}
+        </p>
       </div>
+
+      <!-- Expired State -->
+      <div v-if="isExpired" class="expired-state">
+        <Clock :size="20" />
+        <span class="expired-text">{{ t("receive.expired") }}</span>
+        <button class="reject-btn" @click="handleReject">{{ t("receive.close") }}</button>
+      </div>
+
+      <!-- Normal State -->
+      <template v-else>
+        <!-- File List: live per-file state while downloading, plain list before -->
+        <div class="file-list">
+          <template v-if="!hasDownloadState">
+            <div
+              v-for="(file, idx) in transfer?.files ?? []"
+              :key="file.id || idx"
+              class="file-row"
+            >
+              <FileText :size="14" class="file-row-icon" />
+              <span class="file-row-name">{{ truncateName(file.name) }}</span>
+              <span class="file-row-size">{{ formatBytes(file.size) }}</span>
+            </div>
+          </template>
+          <template v-else>
+            <div v-for="item in downloadItems" :key="item.fileId" class="file-row file-row--live">
+              <CheckCircle2 v-if="item.status === 'done'" :size="14" class="file-status file-status--done" />
+              <XCircle v-else-if="item.status === 'failed'" :size="14" class="file-status file-status--failed" />
+              <FileText v-else :size="14" class="file-row-icon" />
+              <span class="file-row-body">
+                <span class="file-row-name">{{ truncateName(item.name) }}</span>
+                <span v-if="item.status === 'downloading'" class="file-progress">
+                  <span class="file-progress-fill" :style="{ width: `${percentOf(item)}%` }" />
+                </span>
+                <span v-if="item.status === 'failed' && item.error" class="file-error">{{ item.error }}</span>
+              </span>
+              <span v-if="item.status === 'downloading'" class="file-row-size">
+                {{ formatBytes(item.loadedBytes) }}
+              </span>
+              <button
+                v-if="item.status === 'failed'"
+                class="retry-file-btn"
+                type="button"
+                :disabled="receiving"
+                @click="emit('retryFile', item.fileId)"
+              >
+                <RotateCcw :size="12" /> {{ t("transfers.retry") }}
+              </button>
+            </div>
+          </template>
+        </div>
+
+        <!-- Total -->
+        <div class="total-row">
+          <span class="total-label">{{ t("receive.total") }}</span>
+          <span class="total-value">
+            {{ formattedTotal }}
+            <span v-if="hasDownloadState" class="done-count">{{ t("receive.doneCount", { done: doneCount, total: fileCount }) }}</span>
+          </span>
+        </div>
+
+        <!-- Actions -->
+        <div class="dialog-actions">
+          <button
+            v-if="!hasDownloadState"
+            class="accept-btn"
+            :disabled="receiving"
+            @click="handleAccept"
+          >
+            {{ receiving ? t("receive.preparing") : t("receive.accept") }}
+          </button>
+          <button
+            class="reject-btn"
+            :disabled="receiving && !hasDownloadState"
+            @click="handleReject"
+          >
+            {{ hasDownloadState ? t("receive.closeAfterBatch") : t("receive.reject") }}
+          </button>
+        </div>
+      </template>
     </div>
-  </Teleport>
+  </AppDialog>
 </template>
 
 <style scoped>
-.dialog-wrapper {
-  position: fixed;
-  inset: 0;
-  z-index: var(--z-modal);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-}
-
-.backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  animation: fade-in 180ms ease forwards;
-}
-
-.dialog-card {
-  position: relative;
-  width: 100%;
-  max-width: 340px;
-  max-height: 80vh;
+.receive-body {
+  padding: 24px 20px;
   display: flex;
   flex-direction: column;
-  background: var(--color-surface-card);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xl);
-  padding: 24px 20px;
-  animation: scale-in 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  min-height: 0;
 }
 
 .dialog-header {
@@ -489,21 +453,5 @@ function handleReject() {
 .expired-state .reject-btn {
   margin-top: 8px;
   max-width: 160px;
-}
-
-@keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes scale-in {
-  from {
-    opacity: 0;
-    transform: scale(0.92);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
 }
 </style>

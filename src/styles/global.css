@@ -58,6 +58,18 @@ body {
   scrollbar-color: var(--color-border-strong) transparent;
 }
 
+/* ─── Keyboard Focus Visibility (HIG / WCAG 2.4.7) ───
+   One global baseline: any interactive element that receives keyboard focus
+   shows the brand ring. Components may override with stronger treatments. */
+:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--color-brand-primary-soft);
+}
+
 /* ─── Focus Visible ─── */
 :focus-visible {
   outline: 2px solid var(--color-ring);

@@ -6,6 +6,7 @@ import { useAppStore } from "@/stores/app";
 import { pickDirectory } from "@/services/tauri";
 import type { ThemeMode } from "@/types";
 import LanguageSelector from "@/components/settings/LanguageSelector.vue";
+import AppSwitch from "@/components/ui/AppSwitch.vue";
 import { useLocale, type Locale } from "@/i18n";
 import type { CloseBehavior } from "@/services/tauri";
 import { APP_NAME } from "@/config/brand";
@@ -32,8 +33,8 @@ function selectLocale(value: Locale) {
   setLocale(value);
 }
 
-function toggleApproval() {
-  settingsStore.setRequireApproval(!settingsStore.requireApproval);
+function toggleApproval(value: boolean) {
+  void settingsStore.setRequireApproval(value);
 }
 
 function setAuthorizationExpiryHours(hours: number) {
@@ -76,8 +77,8 @@ const closeOptions = computed<{ value: CloseBehavior; label: string }[]>(() => [
   { value: "ask", label: t("settings.closeAsk") },
 ]);
 
-function toggleAutostart() {
-  void settingsStore.setAutostart(!settingsStore.autostartEnabled);
+function toggleAutostart(value: boolean) {
+  void settingsStore.setAutostart(value);
 }
 
 async function changeFolder() {
@@ -109,15 +110,11 @@ async function changeFolder() {
             <span class="toggle-label">{{ t("settings.autostart") }}</span>
             <span class="toggle-desc">{{ t("settings.autostartDescription") }}</span>
           </div>
-          <button
-            class="toggle-switch"
-            :class="{ 'toggle-switch--on': settingsStore.autostartEnabled }"
-            role="switch"
-            :aria-checked="settingsStore.autostartEnabled"
-            @click="toggleAutostart"
-          >
-            <span class="toggle-knob"></span>
-          </button>
+          <AppSwitch
+            :model-value="settingsStore.autostartEnabled"
+            :aria-label="t('settings.autostart')"
+            @update:model-value="toggleAutostart"
+          />
         </div>
         <div class="close-behavior-row">
           <span class="toggle-label">{{ t("settings.closeBehavior") }}</span>
@@ -190,15 +187,11 @@ async function changeFolder() {
             <span class="toggle-label">{{ t("settings.requireApproval") }}</span>
             <span class="toggle-desc">{{ t("settings.requireApprovalDescription") }}</span>
           </div>
-          <button
-            class="toggle-switch"
-            :class="{ 'toggle-switch--on': settingsStore.requireApproval }"
-            role="switch"
-            :aria-checked="settingsStore.requireApproval"
-            @click="toggleApproval"
-          >
-            <span class="toggle-knob"></span>
-          </button>
+          <AppSwitch
+            :model-value="settingsStore.requireApproval"
+            :aria-label="t('settings.requireApproval')"
+            @update:model-value="toggleApproval"
+          />
         </div>
         <div class="toggle-row">
           <div class="toggle-info">
@@ -529,34 +522,6 @@ async function changeFolder() {
   color: var(--color-text-brand);
 }
 
-.toggle-switch {
-  position: relative;
-  width: 44px;
-  height: 24px;
-  border: none;
-  border-radius: var(--radius-full);
-  background: var(--color-border-strong);
-  cursor: pointer;
-  transition: background var(--transition-normal);
-  flex-shrink: 0;
-}
-
-.toggle-switch--on {
-  background: var(--color-brand-primary);
-}
-
-.toggle-knob {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 18px;
-  height: 18px;
-  border-radius: var(--radius-full);
-  background: white;
-  box-shadow: var(--shadow-sm);
-  transition: transform var(--transition-normal);
-}
-
 .speed-limit-picker {
   display: flex;
   align-items: center;
@@ -585,10 +550,6 @@ async function changeFolder() {
   color: var(--color-text-tertiary);
   font-size: var(--text-xs);
   white-space: nowrap;
-}
-
-.toggle-switch--on .toggle-knob {
-  transform: translateX(20px);
 }
 
 .close-behavior-row {

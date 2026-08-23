@@ -3,7 +3,7 @@ import { computed, ref, watch } from "vue";
 import { Check, MonitorSmartphone, ShieldCheck, X } from "lucide-vue-next";
 import { useLocale } from "@/i18n";
 import type { Device } from "@/types";
-import { useModalA11y } from "@/composables/useModalA11y";
+import AppDialog from "@/components/ui/AppDialog.vue";
 
 const props = defineProps<{
   device: Device | null;
@@ -18,15 +18,6 @@ const emit = defineEmits<{
 const { t } = useLocale();
 const trustDevice = ref(false);
 const expiryHours = ref<number | undefined>(undefined);
-// Shared modal a11y baseline (audit-17): focus trap + Escape rejects.
-const cardElement = ref<HTMLElement | null>(null);
-const rejectButton = ref<HTMLButtonElement | null>(null);
-useModalA11y({
-  visible: () => props.device != null,
-  container: cardElement,
-  onEscape: () => reject(),
-  initialFocus: () => rejectButton.value,
-});
 
 watch(
   () => props.device?.id,
@@ -66,112 +57,75 @@ function reject() {
 </script>
 
 <template>
-  <Teleport to="body">
-    <div v-if="device" class="access-request" role="presentation">
-      <div class="access-request__backdrop" />
-      <section
-        ref="cardElement"
-        class="access-request__card"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="device-access-title"
-      >
-        <div class="access-request__icon" aria-hidden="true">
-          <MonitorSmartphone :size="25" />
+  <AppDialog
+    :open="device != null"
+    size="sm"
+    labelled-by="device-access-title"
+    @close="reject"
+  >
+    <div class="access-body">
+      <div class="access-request__icon" aria-hidden="true">
+        <MonitorSmartphone :size="25" />
+      </div>
+      <h2 id="device-access-title">{{ t("device.allowTitle") }}</h2>
+      <!-- audit-7: the device name renders once, inside the i18n sentence. -->
+      <p class="access-request__description">
+        {{ device ? t("device.allowDescription", { name: device.name }) : "" }}
+      </p>
+
+      <dl v-if="device" class="device-details">
+        <div>
+          <dt>{{ t("device.label") }}</dt>
+          <dd>{{ platformLabel }}</dd>
         </div>
-        <h2 id="device-access-title">{{ t("device.allowTitle") }}</h2>
-        <p class="access-request__description">
-          <!-- audit-7: the device name previously rendered twice (bold prefix
-               plus the {name} placeholder inside the i18n string). -->
-          {{ t("device.allowDescription", { name: device.name }) }}
-        </p>
-
-        <dl class="device-details">
-          <div>
-            <dt>{{ t("device.label") }}</dt>
-            <dd>{{ platformLabel }}</dd>
-          </div>
-          <div>
-            <dt>{{ t("device.ipLabel") }}</dt>
-            <dd>{{ device.ip || t("device.noIp") }}</dd>
-          </div>
-        </dl>
-
-        <label class="trust-option">
-          <input v-model="trustDevice" :disabled="pending" type="checkbox" />
-          <span>
-            <span class="trust-option__title"><ShieldCheck :size="16" /> {{ t("device.trustTitle") }}</span>
-            <span class="trust-option__hint">{{ t("device.trustHint") }}</span>
-          </span>
-        </label>
-
-        <div v-if="!trustDevice" class="expiry-option">
-          <span class="trust-option__title">{{ t("device.expiryTitle") }}</span>
-          <div class="expiry-options">
-            <button
-              v-for="option in expiryOptions"
-              :key="String(option.value)"
-              type="button"
-              class="expiry-chip"
-              :class="{ 'expiry-chip--active': expiryHours === option.value }"
-              :disabled="pending"
-              @click="expiryHours = option.value"
-            >
-              {{ t(option.labelKey, { count: option.labelCount ?? 1 }) }}
-            </button>
-          </div>
-          <span class="trust-option__hint">{{ t("device.expiryHint1") }}</span>
+        <div>
+          <dt>{{ t("device.ipLabel") }}</dt>
+          <dd>{{ device.ip || t("device.noIp") }}</dd>
         </div>
+      </dl>
 
-        <p class="access-request__notice">{{ t("device.expiryHint2") }}</p>
+      <label v-if="device" class="trust-option">
+        <input v-model="trustDevice" :disabled="pending" type="checkbox" />
+        <span>
+          <span class="trust-option__title"><ShieldCheck :size="16" /> {{ t("device.trustTitle") }}</span>
+          <span class="trust-option__hint">{{ t("device.trustHint") }}</span>
+        </span>
+      </label>
 
-        <div class="access-request__actions">
+      <div v-if="!trustDevice" class="expiry-option">
+        <span class="trust-option__title">{{ t("device.expiryTitle") }}</span>
+        <div class="expiry-options">
           <button
-            ref="rejectButton"
-            class="reject-button"
+            v-for="option in expiryOptions"
+            :key="String(option.value)"
             type="button"
+            class="expiry-chip"
+            :class="{ 'expiry-chip--active': expiryHours === option.value }"
             :disabled="pending"
-            @click="reject"
+            @click="expiryHours = option.value"
           >
-            <X :size="16" /> {{ t("device.reject") }}
-          </button>
-          <button class="allow-button" type="button" :disabled="pending" @click="allow">
-            <Check :size="16" /> {{ pending ? t("device.allowPending") : t("device.allow") }}
+            {{ t(option.labelKey, { count: option.labelCount ?? 1 }) }}
           </button>
         </div>
-      </section>
+        <span class="trust-option__hint">{{ t("device.expiryHint1") }}</span>
+      </div>
+
+      <p class="access-request__notice">{{ t("device.expiryHint2") }}</p>
+
+      <div class="access-request__actions">
+        <button class="reject-button" type="button" :disabled="pending" @click="reject">
+          <X :size="16" /> {{ t("device.reject") }}
+        </button>
+        <button class="allow-button" type="button" :disabled="pending" @click="allow">
+          <Check :size="16" /> {{ pending ? t("device.allowPending") : t("device.allow") }}
+        </button>
+      </div>
     </div>
-  </Teleport>
+  </AppDialog>
 </template>
 
 <style scoped>
-.access-request {
-  position: fixed;
-  inset: 0;
-  z-index: var(--z-modal);
-  display: grid;
-  place-items: center;
-  padding: 20px;
-}
-
-.access-request__backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgb(15 23 42 / 46%);
-  animation: fade-in 180ms ease forwards;
-}
-
-.access-request__card {
-  position: relative;
-  width: min(100%, 420px);
-  padding: 28px;
-  color: var(--color-text-primary);
-  background: var(--color-surface-card);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xl);
-  animation: scale-in 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
+.access-body { padding: 28px; }
 
 .access-request__icon {
   display: grid;
@@ -346,21 +300,5 @@ h2 {
   color: var(--color-text-secondary);
   background: var(--color-surface-card);
   border: 1px solid var(--color-border);
-}
-
-.allow-button:disabled,
-.reject-button:disabled {
-  cursor: wait;
-  opacity: 0.6;
-}
-
-@keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes scale-in {
-  from { opacity: 0; transform: scale(0.96); }
-  to { opacity: 1; transform: scale(1); }
 }
 </style>

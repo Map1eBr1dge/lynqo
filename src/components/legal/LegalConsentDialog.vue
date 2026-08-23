@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, shallowRef } from "vue";
+import { computed, shallowRef } from "vue";
 import { AlertTriangle, Check, FileText, Scale, ShieldCheck } from "lucide-vue-next";
 import { legalConfig } from "@/config/legal";
 import {
@@ -9,7 +9,7 @@ import {
 import type { LegalConsentStatus } from "@/composables/useLegalConsent";
 import { APP_NAME } from "@/config/brand";
 import { useLocale } from "@/i18n";
-import { useModalA11y } from "@/composables/useModalA11y";
+import AppDialog from "@/components/ui/AppDialog.vue";
 
 interface Props {
   status: LegalConsentStatus;
@@ -36,19 +36,18 @@ const documentTabs = [
   { type: "privacy", labelKey: "legal.privacy", icon: ShieldCheck },
   { type: "disclaimer", labelKey: "legal.disclaimer", icon: Scale },
 ] as const;
-
-// Consent must not be escapable via Escape, but focus still needs to live
-// inside the dialog while it is open (audit-17 baseline).
-const dialogElement = ref<HTMLElement | null>(null);
-useModalA11y({
-  visible: () => props.status !== "accepted",
-  container: dialogElement,
-});
 </script>
 
 <template>
-  <div v-if="status !== 'accepted'" class="consent-overlay">
-    <section ref="dialogElement" class="consent-dialog" role="dialog" aria-modal="true" aria-labelledby="consent-title">
+  <!-- dismissible=false: consent is the one dialog that Esc cannot bypass;
+       focus still lives inside it while open (Reka handles both). -->
+  <AppDialog
+    :open="status !== 'accepted'"
+    size="lg"
+    :dismissible="false"
+    labelled-by="consent-title"
+  >
+    <div class="consent-body">
       <template v-if="!isDeclined">
         <header class="consent-header">
           <div class="consent-icon"><ShieldCheck :size="24" /></div>
@@ -117,13 +116,12 @@ useModalA11y({
         </p>
         <button class="accept-button" type="button" @click="emit('reconsider')">{{ t("legal.reread") }}</button>
       </template>
-    </section>
-  </div>
+    </div>
+  </AppDialog>
 </template>
 
 <style scoped>
-.consent-overlay { position: fixed; inset: 0; z-index: 3000; display: grid; place-items: center; padding: 24px; background: rgba(16, 24, 40, 0.56); backdrop-filter: blur(3px); }
-.consent-dialog { width: min(760px, 100%); max-height: min(860px, calc(100vh - 48px)); display: flex; flex-direction: column; padding: 28px; overflow: hidden; color: var(--color-text-primary); background: var(--color-surface-card); border: 1px solid var(--color-border); border-radius: var(--radius-xl); box-shadow: var(--shadow-float, 0 18px 60px rgba(0, 0, 0, 0.24)); }
+.consent-body { padding: 28px; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 .consent-header { display: flex; align-items: center; gap: 12px; }
 .consent-icon, .declined-icon { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; color: var(--color-brand-primary); background: var(--color-brand-primary-light); border-radius: var(--radius-lg); }
 .declined-icon { margin-bottom: 16px; color: var(--color-warning-text, #8a5b00); background: var(--color-warning-bg, #fff7df); }

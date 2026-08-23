@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, shallowRef, watch } from "vue";
+import { computed, shallowRef, watch } from "vue";
 import { Check, Copy, LoaderCircle, RefreshCw, Wifi, X } from "lucide-vue-next";
 import { useAppStore } from "@/stores/app";
 import { useSettingsStore } from "@/stores/settings";
@@ -8,6 +8,8 @@ import { useLocale } from "@/i18n";
 import { configureWindowsFirewall } from "@/services/tauri";
 import ConnectionDiagnosticsPanel from "./ConnectionDiagnosticsPanel.vue";
 import ConnectionAddressPicker from "./ConnectionAddressPicker.vue";
+import AppDialog from "@/components/ui/AppDialog.vue";
+import AppSwitch from "@/components/ui/AppSwitch.vue";
 
 const props = defineProps<{
   visible: boolean;
@@ -30,9 +32,6 @@ const {
 const copiedField = shallowRef<string | null>(null);
 const settingPending = shallowRef(false);
 const firewallPending = shallowRef(false);
-const panelElement = shallowRef<HTMLElement | null>(null);
-const closeButton = shallowRef<HTMLButtonElement | null>(null);
-let previousFocus: HTMLElement | null = null;
 let panelRefresh: Promise<void> | null = null;
 
 const completeLanUrl = computed(() => {
@@ -77,14 +76,7 @@ async function refreshPanelData() {
 watch(
   () => props.visible,
   (visible, _previous, onCleanup) => {
-    if (!visible) {
-      previousFocus?.focus();
-      previousFocus = null;
-      return;
-    }
-
-    previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    void nextTick(() => closeButton.value?.focus());
+    if (!visible) return;
     void refreshPanelData();
     const timer = window.setInterval(async () => {
       const previousIp = appStore.selectedConnectionIp;
@@ -97,10 +89,10 @@ watch(
   }
 );
 
-async function toggleRequireConfirm() {
+async function toggleRequireConfirm(value: boolean) {
   if (settingPending.value) return;
   settingPending.value = true;
-  const saved = await settingsStore.setRequireApproval(!settingsStore.requireApproval);
+  const saved = await settingsStore.setRequireApproval(value);
   settingPending.value = false;
   if (!saved) {
     appStore.pushToast(
@@ -173,47 +165,19 @@ async function configureFirewall() {
     firewallPending.value = false;
   }
 }
-
-function trapFocus(event: KeyboardEvent) {
-  const panel = panelElement.value;
-  if (!panel) return;
-  const focusable = Array.from(
-    panel.querySelectorAll<HTMLElement>(
-      'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
-    )
-  );
-  if (!focusable.length) return;
-  const first = focusable[0];
-  const last = focusable[focusable.length - 1];
-  if (event.shiftKey && document.activeElement === first) {
-    event.preventDefault();
-    last.focus();
-  } else if (!event.shiftKey && document.activeElement === last) {
-    event.preventDefault();
-    first.focus();
-  }
-}
 </script>
 
 <template>
-  <Teleport to="body">
-    <div
-      v-if="visible"
-      class="panel-wrapper"
-      @keydown.esc.stop="emit('close')"
-      @keydown.tab="trapFocus"
-    >
-      <div class="backdrop" aria-hidden="true" @click="emit('close')" />
-      <aside
-        ref="panelElement"
-        class="panel"
-        role="dialog"
-        aria-modal="true"
-        :aria-label="t('connect.title')"
-      >
-        <div class="panel-header">
-          <span class="panel-title">{{ t("connect.title") }}</span>
-          <button ref="closeButton" class="close-btn" :aria-label="t('connect.close')" @click="emit('close')">
+  <AppDialog
+    :open="visible"
+    variant="sheet-right"
+    :labelled-by="'connect-title'"
+    @close="emit('close')"
+  >
+    <div class="panel-inner">
+      <div class="panel-header">
+        <span id="connect-title" class="panel-title">{{ t("connect.title") }}</span>
+        <button class="close-btn" :aria-label="t('connect.close')" @click="emit('close')">
             <X :size="16" />
           </button>
         </div>
@@ -311,17 +275,12 @@ function trapFocus(event: KeyboardEvent) {
               <span class="setting-label">{{ t("connect.requireApproval") }}</span>
               <small>{{ t("connect.requireApprovalHint") }}</small>
             </div>
-            <button
-              class="toggle"
-              :class="{ active: settingsStore.requireApproval }"
+            <AppSwitch
+              :model-value="settingsStore.requireApproval"
               :disabled="settingPending"
-              role="switch"
-              :aria-checked="settingsStore.requireApproval"
               :aria-label="t('connect.requireApproval')"
-              @click="toggleRequireConfirm"
-            >
-              <span class="toggle-knob" />
-            </button>
+              @update:model-value="toggleRequireConfirm"
+            />
           </div>
           <div class="setting-row">
             <span class="setting-label">{{ t("connect.receiveFolder") }}</span>
@@ -342,28 +301,11 @@ function trapFocus(event: KeyboardEvent) {
           <Wifi :size="12" />
           <span>{{ appStore.networkName }}</span>
         </div>
-      </aside>
     </div>
-  </Teleport>
+  </AppDialog>
 </template>
 
 <style scoped>
-.panel-wrapper { position: fixed; inset: 0; z-index: var(--z-overlay); }
-.backdrop { position: fixed; inset: 0; border: 0; background: rgba(0, 0, 0, 0.12); animation: fade-in 180ms ease forwards; }
-.panel {
-  position: fixed;
-  top: calc(var(--topbar-height) + 6px);
-  right: 32px;
-  width: min(400px, calc(100vw - 32px));
-  max-height: calc(100vh - var(--topbar-height) - 22px);
-  overflow-y: auto;
-  padding: 20px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface-card);
-  box-shadow: var(--shadow-lg);
-  animation: panel-in 200ms ease forwards;
-}
 .panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .panel-title { color: var(--color-text-primary); font-size: var(--text-base); font-weight: var(--weight-semibold); }
 .close-btn, .copy-btn {
@@ -377,7 +319,7 @@ function trapFocus(event: KeyboardEvent) {
   cursor: pointer;
 }
 .close-btn { width: 28px; height: 28px; }
-.copy-btn { flex: 0 0 24px; width: 24px; height: 24px; }
+.copy-btn { flex: 0 0 28px; width: 28px; height: 28px; } /* Fluent icon-button minimum hit target. */
 .close-btn:hover, .copy-btn:hover:not(:disabled) { background: var(--color-hover); color: var(--color-text-primary); }
 .copy-btn:disabled { opacity: 0.35; cursor: default; }
 .copied { color: var(--color-state-success); }
@@ -441,15 +383,7 @@ function trapFocus(event: KeyboardEvent) {
 }
 .setting-row > div { display: flex; flex-direction: column; gap: 2px; }
 .setting-row small { color: var(--color-text-tertiary); font-size: 10px; }
-.toggle { position: relative; flex: 0 0 36px; width: 36px; height: 20px; padding: 0; border: 0; border-radius: var(--radius-full); background: var(--color-border-strong); cursor: pointer; transition: background var(--transition-normal); }
-.toggle.active { background: var(--color-state-success); }
-.toggle:disabled { opacity: 0.55; cursor: default; }
-.toggle-knob { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: var(--radius-full); background: #fff; box-shadow: var(--shadow-sm); transition: transform var(--transition-normal); }
-.toggle.active .toggle-knob { transform: translateX(16px); }
 .network-badge { display: inline-flex; align-items: center; gap: 6px; margin-top: 14px; padding: 5px 10px; border-radius: var(--radius-full); background: var(--color-brand-primary-soft); color: var(--color-text-brand); font-size: var(--text-xs); font-weight: var(--weight-medium); }
 .spin { animation: panel-spin 0.9s linear infinite; }
 @keyframes panel-spin { to { transform: rotate(360deg); } }
-@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-@keyframes panel-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
-@media (max-width: 600px) { .panel { top: 8px; right: 8px; width: calc(100vw - 16px); max-height: calc(100vh - 16px); } }
 </style>

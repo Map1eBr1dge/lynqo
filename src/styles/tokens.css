@@ -9,6 +9,12 @@
   --color-brand-primary-hover: #1E5FE8;
   --color-brand-primary-active: #1A56DB;
 
+  /* ─── Accent (transfer/motion signal, board.json scheme A secondary) ─── */
+  --color-accent: #06B6D4;
+  --color-accent-deep: #0E7490;
+  --color-accent-soft: rgba(6, 182, 212, 0.12);
+  --color-accent-hover: #0891B2;
+
   /* ─── Surfaces ─── */
   --color-surface-page: #F5F7FA;
   --color-surface-card: #FFFFFF;
@@ -61,8 +67,11 @@
   --shadow-dropdown: 0 4px 16px rgba(0, 0, 0, 0.1);
 
   /* ─── Typography ─── */
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
+  /* Platform-aware stack (see spark-output/specs/platform-layout-alignment.md):
+     brand Inter first, then native per-OS faces so the shell feels local. */
+  --font-sans: "Inter", "Segoe UI Variable Text", "Segoe UI", -apple-system,
+    BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Helvetica Neue",
+    Roboto, Arial, sans-serif;
   --font-mono: "JetBrains Mono", "SF Mono", "Fira Code", "Cascadia Code",
     Consolas, monospace;
 
@@ -113,6 +122,12 @@
   --color-brand-primary-soft: rgba(91, 143, 255, 0.12);
   --color-brand-primary-hover: #7BA4FF;
   --color-brand-primary-active: #246BFF;
+
+  /* ─── Accent (brighter cyan for dark surfaces) ─── */
+  --color-accent: #22D3EE;
+  --color-accent-deep: #06B6D4;
+  --color-accent-soft: rgba(34, 211, 238, 0.15);
+  --color-accent-hover: #67E8F9;
 
   /* ─── Surfaces ─── */
   --color-surface-page: #171A1F;
