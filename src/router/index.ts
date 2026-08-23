@@ -90,7 +90,7 @@ const routes: RouteRecordRaw[] = [
     ],
   },
   {
-    path: ":pathMatch(.*)*",
+    path: "/:pathMatch(.*)*",
     name: "not-found",
     component: () => import("../pages/NotFoundPage.vue"),
     meta: { titleKey: "notFound.title" },

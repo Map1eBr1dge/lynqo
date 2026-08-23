@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   FolderOpen,
@@ -28,6 +28,7 @@ import TransferCenterFilterBar, { type TransferCenterFilter } from "@/components
 import ConfirmDialog from "@/components/common/ConfirmDialog.vue";
 import { formatBytes, formatSpeed, formatRemaining } from "@/utils/format";
 import { useLocale } from "@/i18n";
+import { celebrateRow } from "@/utils/motion";
 
 const transfersStore = useTransfersStore();
 const devicesStore = useDevicesStore();
@@ -339,7 +340,40 @@ watch(
 
 onUnmounted(() => {
   if (elapsedTimer !== null) window.clearInterval(elapsedTimer);
+  window.removeEventListener("keydown", onGlobalKeydown);
 });
+
+// audit-26 (partial): "/" jumps to search from anywhere on the page,
+// unless the user is already typing in a field.
+const searchInputRef = ref<HTMLInputElement | null>(null);
+
+function onGlobalKeydown(event: KeyboardEvent) {
+  if (event.key !== "/" || event.ctrlKey || event.metaKey || event.altKey) return;
+  const target = event.target as HTMLElement | null;
+  const typing =
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target?.isContentEditable;
+  if (typing) return;
+  event.preventDefault();
+  searchInputRef.value?.focus();
+}
+
+// ── Celebration: accent wash + micro-lift when a transfer completes ──
+watch(
+  () => transfersStore.transfers.map((task) => [task.id, task.status] as const),
+  (rows, previous) => {
+    const prevMap = new Map(previous ?? []);
+    for (const [id, status] of rows) {
+      if (status === "completed" && prevMap.get(id) !== "completed") {
+        void nextTick(() => {
+          celebrateRow(document.querySelector(`[data-tid="${id}"]`));
+        });
+      }
+    }
+  },
+  { deep: false }
+);
 </script>
 
 <template>
@@ -369,8 +403,10 @@ onUnmounted(() => {
       <div class="search-box">
         <Search :size="14" />
         <input
+          ref="searchInputRef"
           v-model="searchQuery"
           type="text"
+          :aria-label="t('transfers.searchPlaceholder')"
           :placeholder="t('transfers.searchPlaceholder')"
         />
       </div>
@@ -439,6 +475,7 @@ onUnmounted(() => {
             <div
               class="transfer-row"
               :class="{ 'transfer-row--expanded': expandedId === task.id }"
+              :data-tid="task.id"
             >
             <span class="col-checkbox">
               <input
@@ -788,8 +825,10 @@ onUnmounted(() => {
 }
 
 .col-checkbox input[type="checkbox"] {
-  width: 14px;
-  height: 14px;
+  /* 16px visual; row padding supplies adjacent spacing toward the 24px
+     WCAG 2.5.8 target — full-size custom checkbox tracked as residual. */
+  width: 16px;
+  height: 16px;
   accent-color: var(--color-brand-primary);
   cursor: pointer;
 }

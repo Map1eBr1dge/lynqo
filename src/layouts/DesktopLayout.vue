@@ -18,10 +18,13 @@ import AppLogo from "../components/common/AppLogo.vue";
 import ConfirmDialog from "../components/common/ConfirmDialog.vue";
 import ConnectDevicePanel from "../components/overlays/ConnectDevicePanel.vue";
 import DeviceAccessRequestDialog from "../components/overlays/DeviceAccessRequestDialog.vue";
+import WindowCaption from "../components/common/WindowCaption.vue";
 import { openConnectPanelKey } from "../composables/useConnectPanel";
 import { wsClient } from "@/services/websocket";
 import { useLocale } from "@/i18n";
 import { APP_NAME } from "@/config/brand";
+import { detectDesktopPlatform, isDesktopShell } from "@/utils/platform";
+import { staggerIn } from "@/utils/motion";
 
 const appStore = useAppStore();
 const devicesStore = useDevicesStore();
@@ -29,12 +32,26 @@ const transfersStore = useTransfersStore();
 const settingsStore = useSettingsStore();
 const { t } = useLocale();
 
+// ─── Per-platform shell chrome ─────────────────────────────────────────
+// macOS: traffic lights overlay the unified toolbar (HIG); Windows/Linux:
+// decorations disabled, Fluent-style caption buttons sit at the far right.
+// Web builds share the same single-row shell without window controls.
+const platform = detectDesktopPlatform();
+const inTauriShell = isDesktopShell(platform);
+const showCaption = inTauriShell && platform !== "mac";
+
 const showConnectPanel = ref(false);
 const accessDecisionPending = shallowRef(false);
 const pendingDeviceAccess = computed(() => devicesStore.currentPendingApproval);
 
 function refreshDevicesAfterSocketConnect() {
   void devicesStore.fetchDevices();
+}
+
+// anime.js choreography: after the CSS fade completes, stagger the page's
+// top-level blocks upward (animejs.com v4 — MIT).
+function onPageEntered(el: Element) {
+  staggerIn(el.querySelectorAll(":scope > *"), { gap: 55, distance: 12 });
 }
 
 const emit = defineEmits<{
@@ -132,30 +149,42 @@ const navItems = computed(() => [
   { label: t("nav.transfers"), icon: ArrowLeftRight, path: "/transfers" },
   { label: t("nav.received"), icon: Download, path: "/received" },
   { label: t("nav.devices"), icon: Monitor, path: "/devices" },
-  { label: t("nav.settings"), icon: Settings, path: "/settings" },
 ]);
 </script>
 
 <template>
-  <div class="desktop-layout">
-    <!-- Top Bar -->
-    <header class="topbar">
-      <div class="topbar-left">
-        <div class="logo">
-          <AppLogo :size="28" />
-          <span class="logo-text">{{ APP_NAME }}</span>
-        </div>
-        <span class="network-badge">{{ appStore.networkName }}</span>
+  <div class="shell" :data-platform="platform">
+    <!-- ─── Unified single-row toolbar: brand · nav · actions · caption ─── -->
+    <header class="toolbar" data-tauri-drag-region>
+      <div class="toolbar-left" data-tauri-drag-region>
+        <RouterLink to="/" class="brand" :title="`${APP_NAME} ${t('nav.home')}`" aria-label="LanNook">
+          <AppLogo :size="24" />
+        </RouterLink>
+
+        <nav class="nav-tabs" :aria-label="t('mobile.navigation')">
+          <RouterLink
+            v-for="item in navItems"
+            :key="item.path"
+            :to="item.path"
+            class="nav-tab"
+            exact-active-class="nav-tab--active"
+          >
+            <component :is="item.icon" :size="15" />
+            <span>{{ item.label }}</span>
+          </RouterLink>
+        </nav>
       </div>
 
-      <div class="topbar-right">
-        <span class="status-indicator">
+      <div class="toolbar-right">
+        <span class="network-badge" :title="t('settings.network')">{{ appStore.networkName }}</span>
+
+        <span class="status-indicator" :title="appStore.serverRunning ? t('app.running') : t('app.stopped')">
           <span
             class="status-dot"
             :class="appStore.serverRunning ? 'status-dot--running' : 'status-dot--stopped'"
           ></span>
-          <span class="status-label">{{ appStore.serverRunning ? t("app.running") : t("app.stopped") }}</span>
         </span>
+
         <button class="service-toggle-btn" type="button" @click="handleServiceToggle">
           {{ appStore.serverRunning ? t("app.stopService") : t("app.startService") }}
         </button>
@@ -170,51 +199,30 @@ const navItems = computed(() => [
 
         <ThemeToggle />
 
-        <RouterLink to="/settings" class="icon-btn icon-btn--link" :title="t('nav.settings')">
+        <RouterLink to="/help" class="icon-btn icon-btn--link" :title="t('nav.help')" :aria-label="t('nav.help')">
+          <HelpCircle :size="16" />
+        </RouterLink>
+
+        <RouterLink to="/settings" class="icon-btn icon-btn--link" :title="t('nav.settings')" :aria-label="t('nav.settings')">
           <Settings :size="16" />
         </RouterLink>
 
+        <WindowCaption v-if="showCaption" />
       </div>
     </header>
 
-    <!-- Sidebar -->
-    <aside class="sidebar">
-      <nav class="sidebar-nav">
-        <RouterLink
-          v-for="item in navItems"
-          :key="item.path"
-          :to="item.path"
-          class="nav-item"
-          exact-active-class="nav-item--active"
-        >
-          <component :is="item.icon" :size="16" />
-          <span>{{ item.label }}</span>
-        </RouterLink>
-      </nav>
-
-      <div class="sidebar-footer">
-        <RouterLink to="/about" class="version-link">
-          <span class="version">v{{ appStore.appVersion }}</span>
-        </RouterLink>
-        <span class="tray-status">
-          <span class="status-dot" :class="appStore.trayReady ? 'status-dot--running' : 'status-dot--stopped'"></span>
-          {{ appStore.trayReady ? t("app.trayReady") : t("app.trayUnavailable") }}
-        </span>
-        <RouterLink to="/help" class="help-link">
-          <HelpCircle :size="13" />
-          {{ t("nav.help") }}
-        </RouterLink>
-      </div>
-    </aside>
-
-    <!-- Main Content -->
-    <main class="main-content">
+    <!-- ─── Content ─── -->
+    <main class="shell-content">
       <div class="content-wrapper">
-        <RouterView />
+        <RouterView v-slot="{ Component }">
+          <Transition name="page" mode="out-in" @after-enter="onPageEntered">
+            <component :is="Component" />
+          </Transition>
+        </RouterView>
       </div>
     </main>
 
-    <!-- Connect Panel -->
+    <!-- ─── Overlays ─── -->
     <ConnectDevicePanel
       :visible="showConnectPanel"
       @close="showConnectPanel = false"
@@ -238,71 +246,107 @@ const navItems = computed(() => [
 </template>
 
 <style scoped>
-.desktop-layout {
-  min-height: 100vh;
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
 }
 
-/* ─── Top Bar ─── */
-.topbar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: var(--topbar-height);
+/* ─── Unified toolbar ─── */
+.toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
-  background: color-mix(in srgb, var(--color-surface-card) 80%, transparent);
+  gap: 12px;
+  height: var(--topbar-height);
+  padding: 0 8px 0 14px;
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--color-surface-card) 82%, transparent);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--color-border);
   z-index: var(--z-sticky);
 }
 
-.topbar-left {
+.toolbar-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  min-width: 0;
 }
 
-.logo {
+.brand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
+  transition: background var(--transition-fast);
+}
+.brand:hover { background: var(--color-hover); }
+
+/* ─── Top navigation tabs ─── */
+.nav-tabs {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 2px;
+  min-width: 0;
 }
 
-.logo-text {
-  font-size: var(--text-md);
-  font-weight: var(--weight-semibold);
+.nav-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 13px;
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  text-decoration: none;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.nav-tab:hover {
+  background: var(--color-hover);
   color: var(--color-text-primary);
-  letter-spacing: 0.02em;
+}
+
+.nav-tab--active {
+  color: var(--color-brand-primary);
+  background: var(--color-brand-primary-soft);
+  font-weight: var(--weight-medium);
+}
+
+/* ─── Right action cluster ─── */
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-right: 4px;
 }
 
 .network-badge {
   font-size: var(--text-xs);
   color: var(--color-text-brand);
   background: var(--color-brand-primary-soft);
-  padding: 2px 8px;
+  padding: 3px 9px;
   border-radius: var(--radius-full);
   font-weight: var(--weight-medium);
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.topbar-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.status-indicator {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
+.status-indicator { display: inline-flex; align-items: center; }
 
 .status-dot {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: var(--radius-full);
 }
 
@@ -315,11 +359,6 @@ const navItems = computed(() => [
   background: var(--color-text-tertiary);
 }
 
-.status-label {
-  font-size: var(--text-xs);
-  color: var(--color-text-secondary);
-}
-
 .service-toggle-btn {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -328,6 +367,7 @@ const navItems = computed(() => [
   padding: 5px 10px;
   font-size: var(--text-xs);
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .service-toggle-btn:hover {
@@ -341,13 +381,14 @@ const navItems = computed(() => [
   background: var(--color-surface-inset);
   padding: 3px 8px;
   border-radius: var(--radius-full);
+  white-space: nowrap;
 }
 
 .btn-primary {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 14px;
+  padding: 7px 14px;
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
   color: #fff;
@@ -356,6 +397,7 @@ const navItems = computed(() => [
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: background var(--transition-fast);
+  white-space: nowrap;
 }
 
 .btn-primary:hover {
@@ -377,6 +419,7 @@ const navItems = computed(() => [
   background: transparent;
   color: var(--color-text-tertiary);
   cursor: pointer;
+  text-decoration: none;
   transition: background var(--transition-fast), color var(--transition-fast);
 }
 
@@ -385,113 +428,56 @@ const navItems = computed(() => [
   color: var(--color-text-secondary);
 }
 
-.icon-btn--link {
-  text-decoration: none;
+.icon-btn--link { text-decoration: none; }
+
+/* Windows/Linux builds pull the caption flush against the window edge. */
+.shell[data-platform="windows"] .toolbar-right,
+.shell[data-platform="linux"] .toolbar-right {
+  padding-right: 0;
+  margin-right: -8px;
 }
 
-/* ─── Sidebar ─── */
-.sidebar {
-  position: fixed;
-  top: var(--topbar-height);
-  left: 0;
-  bottom: 0;
-  width: var(--sidebar-width);
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 16px 12px;
-  background: var(--color-surface-card);
-  border-right: 1px solid var(--color-border);
-  z-index: var(--z-base);
+/* Narrow windows: badges yield first, then tab labels compress. */
+@media (max-width: 1220px) {
+  .network-badge,
+  .device-count-badge { display: none; }
+}
+@media (max-width: 1040px) {
+  .nav-tab { padding: 0 9px; }
+  .nav-tab span { display: none; }
+  .nav-tab { gap: 0; }
 }
 
-.sidebar-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.nav-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 12px;
-  border-radius: var(--radius-md);
-  border-left: 2.5px solid transparent;
-  font-size: var(--text-base);
-  color: var(--color-text-secondary);
-  text-decoration: none;
-  transition: background var(--transition-fast), color var(--transition-fast),
-    border-color var(--transition-fast);
-}
-
-.nav-item:hover {
-  background: var(--color-hover);
-  color: var(--color-text-primary);
-}
-
-.nav-item--active {
-  color: var(--color-brand-primary);
-  background: var(--color-brand-primary-soft);
-  border-left-color: var(--color-brand-primary);
-  font-weight: var(--weight-medium);
-}
-
-/* ─── Sidebar Footer ─── */
-.sidebar-footer {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding-top: 12px;
-  border-top: 1px solid var(--color-border);
-}
-
-.version {
-  font-size: var(--text-xs);
-  color: var(--color-text-tertiary);
-}
-
-.version-link {
-  text-decoration: none;
-  transition: color var(--transition-fast);
-}
-
-.version-link:hover .version {
-  color: var(--color-text-brand);
-}
-
-.tray-status {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--text-xs);
-  color: var(--color-text-tertiary);
-}
-
-.help-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: var(--text-xs);
-  color: var(--color-text-tertiary);
-  text-decoration: none;
-  transition: color var(--transition-fast);
-}
-
-.help-link:hover {
-  color: var(--color-text-brand);
-}
-
-/* ─── Main Content ─── */
-.main-content {
-  margin-left: var(--sidebar-width);
-  padding-top: var(--topbar-height);
-  min-height: 100vh;
+/* ─── Content ─── */
+.shell-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .content-wrapper {
   max-width: 1100px;
   margin: 0 auto;
   padding: 24px 32px;
+}
+
+/* ─── Page transition (board.json motion tiers) ─── */
+.page-enter-active {
+  transition: opacity 200ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.page-leave-active {
+  transition: opacity 140ms cubic-bezier(0.4, 0, 1, 1);
+}
+.page-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.page-leave-to {
+  opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-enter-active,
+  .page-leave-active { transition-duration: 1ms; }
 }
 </style>

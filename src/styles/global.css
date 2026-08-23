@@ -70,9 +70,11 @@ body {
   background: var(--color-brand-primary-soft);
 }
 
-/* ─── Focus Visible ─── */
+/* ─── Focus Visible ───
+   Single source of truth for the keyboard focus indicator. Mouse clicks do
+   not show it (:focus:not(:focus-visible)); keyboard focus always does. */
 :focus-visible {
-  outline: 2px solid var(--color-ring);
+  outline: 2px solid var(--color-border-focus);
   outline-offset: 2px;
   border-radius: var(--radius-sm);
 }

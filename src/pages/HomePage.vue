@@ -25,6 +25,7 @@ import { formatRelativeTime, formatBytes } from "@/utils/format";
 import { openConnectPanelKey } from "@/composables/useConnectPanel";
 import type { Device } from "@/types";
 import { useLocale } from "@/i18n";
+import { elasticPop } from "@/utils/motion";
 import EmptyState from "@/components/ui/EmptyState.vue";
 import AppButton from "@/components/ui/AppButton.vue";
 
@@ -59,7 +60,28 @@ onMounted(async () => {
 
 onUnmounted(() => {
   unlistenNativeDrop?.();
+  window.removeEventListener("keydown", onGlobalKeydown);
 });
+
+// audit-26 (partial): Ctrl/Cmd+Enter fires the primary send action when the
+// composer is in a sendable state — the one shortcut this screen truly needs.
+function canSend(): boolean {
+  return (
+    sendStatus.value === "idle" &&
+    pendingFiles.value.length > 0 &&
+    selectedDevice.value != null &&
+    selectedDevice.value.approved
+  );
+}
+
+function onGlobalKeydown(event: KeyboardEvent) {
+  if ((event.ctrlKey || event.metaKey) && event.key === "Enter" && canSend()) {
+    event.preventDefault();
+    void handleSend();
+  }
+}
+
+onMounted(() => window.addEventListener("keydown", onGlobalKeydown));
 
 // Pending files - in Tauri mode these hold real file paths
 const pendingFiles = computed(() => transfersStore.pendingFiles);
@@ -210,6 +232,16 @@ function getErrorMessage(error: unknown): string {
 
 function removePendingFile(id: string) {
   transfersStore.removePendingFile(id);
+}
+
+const dropZoneRef = ref<HTMLElement | null>(null);
+
+function onDragEnter(e: DragEvent) {
+  e.preventDefault();
+  // Elastic acknowledgment fires once per entry (isDragging guards re-fires
+  // while hovering children).
+  if (!isDragging.value) elasticPop(dropZoneRef.value, 1.015);
+  isDragging.value = true;
 }
 
 function onDragOver(e: DragEvent) {
@@ -394,12 +426,18 @@ const sendBtnLabel = computed(() => {
             v-for="device in devicesStore.devices"
             :key="device.id"
             class="device-row"
+            role="button"
+            tabindex="0"
+            :aria-pressed="devicesStore.selectedDeviceId === device.id"
+            :aria-label="device.name"
             :class="{
               'device-row--selected': devicesStore.selectedDeviceId === device.id,
               'device-row--offline': !device.online,
               'device-row--unapproved': !device.approved,
             }"
             @click="selectDevice(device)"
+            @keydown.enter.prevent="selectDevice(device)"
+            @keydown.space.prevent="selectDevice(device)"
           >
             <span class="device-check">
               <Check
@@ -439,6 +477,7 @@ const sendBtnLabel = computed(() => {
 
       <!-- File Drop Zone (audit-27: the whole zone is now clickable) -->
       <section
+        ref="dropZoneRef"
         class="drop-zone"
         :class="{ 'drop-zone--active': isDragging }"
         role="button"
@@ -447,6 +486,7 @@ const sendBtnLabel = computed(() => {
         @click="openFilePicker"
         @keydown.enter.prevent="openFilePicker"
         @keydown.space.prevent="openFilePicker"
+        @dragenter="onDragEnter"
         @dragover="onDragOver"
         @dragleave="onDragLeave"
         @drop="onDrop"
